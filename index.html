@@ -1,139 +1,67 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>One Shot</title>
 
 <style>
-html, body {
-  margin: 0;
-  height: 100%;
-  background: #121213;
-  color: white;
-  font-family: Arial, sans-serif;
-}
-
 body {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  box-sizing: border-box;
+  margin:0;
+  height:100vh;
+  display:grid;
+  place-items:center;
+  background:#121213;
+  color:white;
+  font-family:Arial;
 }
 
-.container {
-  width: 100%;
-  max-width: 420px;
-  text-align: center;
-}
+.container { text-align:center; width:100%; max-width:420px; }
 
-h1 {
-  letter-spacing: 3px;
-  margin-bottom: 6px;
-}
-
-p {
-  opacity: 0.8;
-  margin-top: 0;
-}
-
-/* GRID */
 .tiles {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin: 20px 0 10px;
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin:20px 0;
 }
 
 .tile {
-  width: 52px;
-  height: 52px;
-  border: 2px solid #3a3a3c;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: bold;
-  text-transform: uppercase;
-  transition: transform 0.3s ease, background 0.3s ease;
+  width:52px;
+  height:52px;
+  border:2px solid #3a3a3c;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:bold;
+  text-transform:uppercase;
+  transition:0.3s;
 }
 
-/* COLORS */
-.tile.correct {
-  background: #538d4e;
-  border-color: #538d4e;
+.correct { background:#538d4e; border-color:#538d4e; }
+.present { background:#b59f3b; border-color:#b59f3b; }
+.absent { background:#3a3a3c; border-color:#3a3a3c; }
+
+input,button {
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  background:#1a1a1b;
+  color:white;
+  border:2px solid #3a3a3c;
+  text-align:center;
 }
 
-.tile.present {
-  background: #b59f3b;
-  border-color: #b59f3b;
-}
+button { background:#538d4e; cursor:pointer; }
 
-.tile.absent {
-  background: #3a3a3c;
-  border-color: #3a3a3c;
-}
+#message { margin-top:15px; min-height:20px; }
 
-/* INPUT */
-.inputHint {
-  font-size: 13px;
-  opacity: 0.75;
-  margin-bottom: 6px;
-}
-
-#guessInput, #email {
-  width: 100%;
-  padding: 12px;
-  margin-top: 10px;
-  font-size: 16px;
-  background: #1a1a1b;
-  border: 2px solid #3a3a3c;
-  color: white;
-  text-align: center;
-  box-sizing: border-box;
-}
-
-button {
-  width: 100%;
-  margin-top: 10px;
-  padding: 12px;
-  background: #538d4e;
-  border: none;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-/* MESSAGE */
-#message {
-  margin-top: 18px;
-  min-height: 24px;
-  font-weight: bold;
-}
-
-/* SHAKE ANIMATION */
-.shake {
-  animation: shake 0.4s ease;
-}
+.shake { animation:shake 0.4s; }
 
 @keyframes shake {
-  0%,100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  50% { transform: translateX(5px); }
-  75% { transform: translateX(-5px); }
-}
-
-/* FLIP ANIMATION */
-.flip {
-  animation: flip 0.5s ease forwards;
-  transform-style: preserve-3d;
-}
-
-@keyframes flip {
-  0% { transform: rotateX(0); }
-  50% { transform: rotateX(90deg); }
-  100% { transform: rotateX(0); }
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-5px)}
+  50%{transform:translateX(5px)}
+  75%{transform:translateX(-5px)}
 }
 </style>
 </head>
@@ -142,130 +70,113 @@ button {
 
 <div class="container">
 
-  <h1>ONE SHOT</h1>
-  <p>One guess. Make it count.</p>
+<h1>ONE SHOT</h1>
 
-  <div class="tiles" id="tiles">
-    <div class="tile"></div>
-    <div class="tile"></div>
-    <div class="tile"></div>
-    <div class="tile"></div>
-    <div class="tile"></div>
-  </div>
+<div class="tiles" id="tiles">
+  <div class="tile"></div>
+  <div class="tile"></div>
+  <div class="tile"></div>
+  <div class="tile"></div>
+  <div class="tile"></div>
+</div>
 
-  <div class="inputHint">Type your 5-letter guess</div>
+<input id="guess" maxlength="5" />
+<input id="email" placeholder="email" />
+<button onclick="submitGuess()">Submit</button>
 
-  <input id="guessInput" maxlength="5" autocomplete="off" autocapitalize="none" />
-  <input id="email" placeholder="email" />
-
-  <button id="submitBtn">Submit</button>
-
-  <div id="message"></div>
+<div id="message"></div>
+<button id="shareBtn" style="display:none">Share</button>
 
 </div>
 
 <script>
-const tiles = document.querySelectorAll(".tile");
-const guessInput = document.getElementById("guessInput");
+const tiles = [...document.querySelectorAll(".tile")];
+const guessInput = document.getElementById("guess");
 const emailInput = document.getElementById("email");
-const message = document.getElementById("message");
-const submitBtn = document.getElementById("submitBtn");
+const msg = document.getElementById("message");
+const shareBtn = document.getElementById("shareBtn");
 
-const snark = [
-  "Wow. That was confidently wrong.",
-  "Not even close.",
-  "You had one job.",
-  "That’s impressively bad.",
-  "Respectfully… no.",
-  "Did you even try?",
-  "Incorrect. As expected.",
-  "That was painful."
-];
+let last = null;
+let evaluation = null;
 
-let guess = "";
-let locked = false;
-
-/* INPUT */
 guessInput.addEventListener("input", () => {
-  guess = guessInput.value.toLowerCase().replace(/[^a-z]/g, "").slice(0,5);
-  guessInput.value = guess;
+  guessInput.value = guessInput.value.toLowerCase().slice(0,5);
   render();
 });
 
-function render() {
-  tiles.forEach((t,i) => {
-    t.textContent = guess[i] || "";
-  });
+function render(){
+  const g = guessInput.value;
+  tiles.forEach((t,i)=>t.textContent=g[i]||"");
 }
 
-/* SHAKE */
-function shake() {
-  tiles.forEach(t => {
+function shake(){
+  tiles.forEach(t=>{
     t.classList.add("shake");
-    setTimeout(() => t.classList.remove("shake"), 400);
+    setTimeout(()=>t.classList.remove("shake"),400);
   });
 }
 
-/* FLIP REVEAL */
-function reveal(result) {
-  tiles.forEach((tile, i) => {
-    setTimeout(() => {
-      tile.classList.add("flip");
-      setTimeout(() => {
-        tile.classList.add(result);
-      }, 250);
-    }, i * 200);
-  });
-}
+async function submitGuess(){
+  const email = emailInput.value;
+  const guess = guessInput.value;
 
-/* SUBMIT */
-submitBtn.addEventListener("click", submitGuess);
-
-async function submitGuess() {
-  if (locked) return;
-
-  const email = emailInput.value.trim();
-
-  if (guess.length !== 5 || !email) {
-    message.innerText = "Enter 5 letters + email.";
+  if(guess.length!==5){
+    msg.textContent="5 letters only";
     shake();
     return;
   }
 
-  locked = true;
-  submitBtn.disabled = true;
+  const res = await fetch("/.netlify/functions/game",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({email,guess})
+  });
 
-  try {
-    const res = await fetch("/.netlify/functions/game", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ email, guess })
-    });
+  const data = await res.json();
 
-    const data = await res.json();
-
-    if (data.result === "correct") {
-      reveal("correct");
-      message.style.color = "#538d4e";
-      message.innerText = "Correct.";
-    }
-
-    else if (data.result === "already_used") {
-      message.style.color = "#ffb020";
-      message.innerText = "Already used today.";
-    }
-
-    else {
-      reveal("absent");
-      message.style.color = "#e91e63";
-      message.innerText = snark[Math.floor(Math.random()*snark.length)];
-    }
-
-  } catch (e) {
-    message.innerText = "Backend error.";
-    console.error(e);
+  if(data.result==="already_used"){
+    msg.textContent="Already used today.";
+    return;
   }
+
+  last = data.result;
+  evaluation = data.evaluation;
+
+  tiles.forEach((t,i)=>{
+    setTimeout(()=>{
+      t.classList.add(evaluation[i]);
+    },i*200);
+  });
+
+  msg.textContent = data.result==="correct"
+    ? "Correct."
+    : "Wrong.";
+
+  shareBtn.style.display="block";
 }
+
+shareBtn.onclick = async () => {
+  const isWin = last==="correct";
+
+  const grid = evaluation
+    ? evaluation.map(e =>
+        e==="correct"?"🟩":
+        e==="present"?"🟨":"⬛"
+      ).join("")
+    : "⬛⬛⬛⬛⬛";
+
+  const text =
+`One Shot
+${isWin?"1/1":"0/1"}
+
+${grid}
+
+https://iridescent-pavlova-31bf43.netlify.app`;
+
+  await navigator.clipboard.writeText(text);
+  shareBtn.textContent="Copied!";
+  setTimeout(()=>shareBtn.textContent="Share",1500);
+};
 </script>
 
 </body>
