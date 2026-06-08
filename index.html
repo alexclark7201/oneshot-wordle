@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>One Shot</title>
+
+<style>
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #121213;
+  color: white;
+  font-family: Arial;
+}
+
+/* STABLE MOBILE CENTERING */
+body {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+h1 {
+  letter-spacing: 3px;
+  margin-bottom: 10px;
+}
+
+.tiles {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.tile {
+  width: 52px;
+  height: 52px;
+  border: 2px solid #3a3a3c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  background: #1a1a1b;
+  color: white;
+  border: 2px solid #3a3a3c;
+  text-align: center;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+#guessInput {
+  letter-spacing: 6px;
+  font-size: 18px;
+}
+
+button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: #538d4e;
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#message {
+  margin-top: 20px;
+  min-height: 24px;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>ONE SHOT</h1>
+  <p>One guess. One word.</p>
+
+  <!-- WORDLE TILES (VISUAL ONLY) -->
+  <div class="tiles" id="tiles">
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+  </div>
+
+  <!-- REAL INPUTS -->
+  <input id="guessInput" maxlength="5" autocomplete="off" />
+  <input id="email" placeholder="email" />
+
+  <button onclick="submitGuess()">Submit</button>
+
+  <div id="message"></div>
+
+</div>
+
+<script>
+let guess = "";
+let locked = false;
+
+const tiles = document.querySelectorAll(".tile");
+const guessInput = document.getElementById("guessInput");
+const emailInput = document.getElementById("email");
+const msg = document.getElementById("message");
+
+/* REAL INPUT HANDLING (NO FOCUS HACKS) */
+guessInput.addEventListener("input", (e) => {
+  if (locked) return;
+
+  guess = e.target.value
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+    .slice(0, 5);
+
+  guessInput.value = guess;
+  render();
+});
+
+guessInput.addEventListener("keydown", (e) => {
+  if (locked) return;
+  if (e.key === "Enter") submitGuess();
+});
+
+function render() {
+  tiles.forEach((tile, i) => {
+    tile.textContent = guess[i] || "";
+  });
+}
+
+async function submitGuess() {
+  if (locked) return;
+
+  const email = emailInput.value.trim();
+
+  if (guess.length !== 5 || !email) {
+    msg.innerText = "Enter 5-letter word + email.";
+    return;
+  }
+
+  locked = true;
+
+  const res = await fetch("/.netlify/functions/game", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, guess })
+  });
+
+  const data = await res.json();
+
+  if (data.result === "correct") {
+    msg.style.color = "#538d4e";
+    msg.innerText = "Correct.";
+  } 
+  else if (data.result === "already_used") {
+    msg.style.color = "#ffb020";
+    msg.innerText = "Already used today.";
+  } 
+  else {
+    msg.style.color = "#e91e63";
+    msg.innerText = "Incorrect.";
+  }
+}
+</script>
+
+</body>
+</html>
