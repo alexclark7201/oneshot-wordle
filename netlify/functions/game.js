@@ -1,11 +1,17 @@
-// =====================================
-// ONE SHOT - GAME ENGINE v3
-// Daily Word + First Winner Lock System
-// =====================================
+import { createClient } from "@supabase/supabase-js";
 
-// ---------------------
+// ===============================
+// SUPABASE CLIENT (SERVER ONLY)
+// ===============================
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+// ===============================
 // WORD LIST
-// ---------------------
+// ===============================
 
 const WORDS = [
   "apple","crane","smile","grape","flame",
@@ -14,39 +20,33 @@ const WORDS = [
   "cloud","ocean","storm","beach","music"
 ];
 
-// ---------------------
-// DAILY STATE (TEMP MEMORY)
-// ---------------------
+// ===============================
+// DAILY WORD (DETERMINISTIC)
+// ===============================
 
-const dailyState = {};
+function getDailyWord() {
+  const d = new Date();
 
-// ---------------------
-// DATE KEY (GLOBAL DAY ID)
-// ---------------------
+  const seed =
+    d.getFullYear() * 10000 +
+    (d.getMonth() + 1) * 100 +
+    d.getDate();
+
+  return WORDS[seed % WORDS.length];
+}
+
+// ===============================
+// DATE KEY
+// ===============================
 
 function getTodayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-// ---------------------
-// DAILY WORD (DETERMINISTIC)
-// ---------------------
-
-function getDailyWord() {
-  const today = new Date();
-
-  const seed =
-    today.getFullYear() * 10000 +
-    (today.getMonth() + 1) * 100 +
-    today.getDate();
-
-  return WORDS[seed % WORDS.length];
-}
-
-// ---------------------
-// WORDLE EVALUATION ENGINE
-// ---------------------
+// ===============================
+// EVALUATION ENGINE
+// ===============================
 
 function evaluate(guess, word) {
   const result = Array(5).fill("absent");
@@ -77,16 +77,16 @@ function evaluate(guess, word) {
   return result;
 }
 
-// ---------------------
-// SCORING SYSTEM
-// ---------------------
+// ===============================
+// SCORING
+// ===============================
 
 function calculateScore(evaluation, isCorrect) {
   let score = 0;
 
-  for (let i = 0; i < evaluation.length; i++) {
-    if (evaluation[i] === "correct") score += 5;
-    if (evaluation[i] === "present") score += 1;
+  for (const e of evaluation) {
+    if (e === "correct") score += 5;
+    if (e === "present") score += 1;
   }
 
   if (isCorrect) score += 50;
@@ -94,9 +94,9 @@ function calculateScore(evaluation, isCorrect) {
   return score;
 }
 
-// ---------------------
-// RESPONSE HELPER
-// ---------------------
+// ===============================
+// NETLIFY RESPONSE
+// ===============================
 
 function json(body) {
   return {
@@ -109,9 +109,52 @@ function json(body) {
   };
 }
 
-// ---------------------
-// MAIN HANDLER
-// ---------------------
+// ===============================
+// GET OR CREATE DAILY GAME
+// ===============================
+
+async function getOrCreateGame(dateKey, word) {
+  const { data, error } = await supabase
+    .from("daily_games")
+    .select("*")
+    .eq("date", dateKey)
+    .single();
+
+  if (data) return data;
+
+  await supabase.from("daily_games").insert({
+    date: dateKey,
+    word,
+    solved: false,
+    winner: null
+  });
+
+  return {
+    date: dateKey,
+    word,
+    solved: false,
+    winner: null
+  };
+}
+
+// ===============================
+// LOCK GAME
+// ===============================
+
+async function lockGame(dateKey, winner) {
+  await supabase
+    .from("daily_games")
+    .update({
+      solved: true,
+      winner,
+      solved_at: new Date().toISOString()
+    })
+    .eq("date", dateKey);
+}
+
+// ===============================
+// HANDLER
+// ===============================
 
 export async function handler(event) {
   try {
@@ -128,57 +171,45 @@ export async function handler(event) {
     }
 
     const word = getDailyWord();
+    const todayKey = getTodayKey();
+
+    const game = await getOrCreateGame(todayKey, word);
+
     const cleanGuess = guess.toLowerCase();
 
     const evaluation = evaluate(cleanGuess, word);
     const isCorrect = cleanGuess === word;
     const score = calculateScore(evaluation, isCorrect);
 
-    const todayKey = getTodayKey();
+    // ===============================
+    // GAME ALREADY LOCKED
+    // ===============================
 
-    // ---------------------
-    // INIT DAILY STATE
-    // ---------------------
-
-    if (!dailyState[todayKey]) {
-      dailyState[todayKey] = {
-        solved: false,
-        winner: null,
-        solvedAt: null
-      };
-    }
-
-    // ---------------------
-    // IF ALREADY SOLVED
-    // ---------------------
-
-    if (dailyState[todayKey].solved) {
+    if (game.solved) {
       return json({
         evaluation,
         score,
         isCorrect,
         gameLocked: true,
-        winner: dailyState[todayKey].winner,
-        message: `Already solved today by ${dailyState[todayKey].winner}`
+        winner: game.winner,
+        message: `Already solved today by ${game.winner}`
       });
     }
 
-    // ---------------------
-    // FIRST WINNER LOCK
-    // ---------------------
+    // ===============================
+    // FIRST WINNER LOGIC
+    // ===============================
 
-    if (isCorrect && !dailyState[todayKey].solved) {
-      dailyState[todayKey].solved = true;
-      dailyState[todayKey].winner = "Player";
-      dailyState[todayKey].solvedAt = new Date().toISOString();
+    if (isCorrect) {
+      await lockGame(todayKey, "Player");
     }
 
     return json({
       evaluation,
       score,
       isCorrect,
-      gameLocked: dailyState[todayKey].solved,
-      winner: dailyState[todayKey].winner,
+      gameLocked: isCorrect,
+      winner: isCorrect ? "Player" : null,
       message: isCorrect
         ? "You solved it. First today."
         : "Not it."
