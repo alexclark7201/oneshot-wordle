@@ -1,10 +1,11 @@
-// ================================
-// ONE SHOT - GAME ENGINE v2
-// Daily Word System (Stateless)
-// ================================
+// =====================================
+// ONE SHOT - GAME ENGINE v3
+// Daily Word + First Winner Lock System
+// =====================================
 
-// 1. WORD LIST (temporary local version)
-// Later we can move this to a DB or larger JSON file
+// ---------------------
+// WORD LIST
+// ---------------------
 
 const WORDS = [
   "apple","crane","smile","grape","flame",
@@ -13,27 +14,39 @@ const WORDS = [
   "cloud","ocean","storm","beach","music"
 ];
 
-// ================================
-// 2. DAILY WORD SEED FUNCTION
-// ================================
+// ---------------------
+// DAILY STATE (TEMP MEMORY)
+// ---------------------
+
+const dailyState = {};
+
+// ---------------------
+// DATE KEY (GLOBAL DAY ID)
+// ---------------------
+
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+// ---------------------
+// DAILY WORD (DETERMINISTIC)
+// ---------------------
 
 function getDailyWord() {
   const today = new Date();
 
-  // YYYYMMDD seed (stable per day globally)
   const seed =
     today.getFullYear() * 10000 +
     (today.getMonth() + 1) * 100 +
     today.getDate();
 
-  const index = seed % WORDS.length;
-
-  return WORDS[index];
+  return WORDS[seed % WORDS.length];
 }
 
-// ================================
-// 3. WORDLE EVALUATION ENGINE
-// ================================
+// ---------------------
+// WORDLE EVALUATION ENGINE
+// ---------------------
 
 function evaluate(guess, word) {
   const result = Array(5).fill("absent");
@@ -41,7 +54,7 @@ function evaluate(guess, word) {
   const w = word.split("");
   const g = guess.split("");
 
-  // Step 1: correct positions
+  // correct pass
   for (let i = 0; i < 5; i++) {
     if (g[i] === w[i]) {
       result[i] = "correct";
@@ -50,7 +63,7 @@ function evaluate(guess, word) {
     }
   }
 
-  // Step 2: present letters
+  // present pass
   for (let i = 0; i < 5; i++) {
     if (!g[i]) continue;
 
@@ -64,9 +77,9 @@ function evaluate(guess, word) {
   return result;
 }
 
-// ================================
-// 4. SCORING SYSTEM
-// ================================
+// ---------------------
+// SCORING SYSTEM
+// ---------------------
 
 function calculateScore(evaluation, isCorrect) {
   let score = 0;
@@ -81,9 +94,9 @@ function calculateScore(evaluation, isCorrect) {
   return score;
 }
 
-// ================================
-// 5. RESPONSE HELPERS
-// ================================
+// ---------------------
+// RESPONSE HELPER
+// ---------------------
 
 function json(body) {
   return {
@@ -96,9 +109,9 @@ function json(body) {
   };
 }
 
-// ================================
-// 6. MAIN HANDLER
-// ================================
+// ---------------------
+// MAIN HANDLER
+// ---------------------
 
 export async function handler(event) {
   try {
@@ -121,13 +134,53 @@ export async function handler(event) {
     const isCorrect = cleanGuess === word;
     const score = calculateScore(evaluation, isCorrect);
 
+    const todayKey = getTodayKey();
+
+    // ---------------------
+    // INIT DAILY STATE
+    // ---------------------
+
+    if (!dailyState[todayKey]) {
+      dailyState[todayKey] = {
+        solved: false,
+        winner: null,
+        solvedAt: null
+      };
+    }
+
+    // ---------------------
+    // IF ALREADY SOLVED
+    // ---------------------
+
+    if (dailyState[todayKey].solved) {
+      return json({
+        evaluation,
+        score,
+        isCorrect,
+        gameLocked: true,
+        winner: dailyState[todayKey].winner,
+        message: `Already solved today by ${dailyState[todayKey].winner}`
+      });
+    }
+
+    // ---------------------
+    // FIRST WINNER LOCK
+    // ---------------------
+
+    if (isCorrect && !dailyState[todayKey].solved) {
+      dailyState[todayKey].solved = true;
+      dailyState[todayKey].winner = "Player";
+      dailyState[todayKey].solvedAt = new Date().toISOString();
+    }
+
     return json({
       evaluation,
       score,
       isCorrect,
-      gameLocked: isCorrect,
+      gameLocked: dailyState[todayKey].solved,
+      winner: dailyState[todayKey].winner,
       message: isCorrect
-        ? "Correct."
+        ? "You solved it. First today."
         : "Not it."
     });
 
