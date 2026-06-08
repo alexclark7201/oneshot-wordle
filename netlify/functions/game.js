@@ -1,81 +1,47 @@
-export async function handler(event) {
-  try {
-    const { guess } = JSON.parse(event.body || "{}");
+// ================================
+// ONE SHOT - GAME ENGINE v2
+// Daily Word System (Stateless)
+// ================================
 
-    if (!guess || guess.length !== 5) {
-      return json({
-        error: "invalid_guess",
-        message: "Enter a 5-letter word."
-      });
-    }
+// 1. WORD LIST (temporary local version)
+// Later we can move this to a DB or larger JSON file
 
-    // =========================
-    // 1. LOAD DAILY GAME STATE
-    // =========================
-    const game = await getDailyGame();
+const WORDS = [
+  "apple","crane","smile","grape","flame",
+  "brick","stone","plant","train","light",
+  "river","sound","crown","sharp","brave",
+  "cloud","ocean","storm","beach","music"
+];
 
-    if (game.solved) {
-      return json({
-        evaluation: null,
-        score: 0,
-        isCorrect: false,
-        gameLocked: true,
-        message: `Game over. The word was ${game.word}.`
-      });
-    }
+// ================================
+// 2. DAILY WORD SEED FUNCTION
+// ================================
 
-    const word = game.word.toLowerCase();
-    const cleanGuess = guess.toLowerCase();
+function getDailyWord() {
+  const today = new Date();
 
-    // =========================
-    // 2. EVALUATE GUESS
-    // =========================
-    const evaluation = evaluate(cleanGuess, word);
+  // YYYYMMDD seed (stable per day globally)
+  const seed =
+    today.getFullYear() * 10000 +
+    (today.getMonth() + 1) * 100 +
+    today.getDate();
 
-    const isCorrect = cleanGuess === word;
+  const index = seed % WORDS.length;
 
-    // =========================
-    // 3. CALCULATE SCORE
-    // =========================
-    const score = calculateScore(evaluation, isCorrect);
-
-    // =========================
-    // 4. LOCK GAME IF WON
-    // =========================
-    if (isCorrect) {
-      await lockGame(game.date);
-    }
-
-    return json({
-      evaluation,
-      score,
-      isCorrect,
-      gameLocked: isCorrect,
-      message: isCorrect
-        ? "You got it. Clean."
-        : "Not it."
-    });
-
-  } catch (err) {
-    return json({
-      error: "server_error",
-      message: "Something broke."
-    });
-  }
+  return WORDS[index];
 }
 
----
-
-/* =========================
-   GAME ENGINE CORE
-========================= */
+// ================================
+// 3. WORDLE EVALUATION ENGINE
+// ================================
 
 function evaluate(guess, word) {
   const result = Array(5).fill("absent");
+
   const w = word.split("");
   const g = guess.split("");
 
-  // correct pass
+  // Step 1: correct positions
   for (let i = 0; i < 5; i++) {
     if (g[i] === w[i]) {
       result[i] = "correct";
@@ -84,7 +50,7 @@ function evaluate(guess, word) {
     }
   }
 
-  // present pass
+  // Step 2: present letters
   for (let i = 0; i < 5; i++) {
     if (!g[i]) continue;
 
@@ -97,6 +63,10 @@ function evaluate(guess, word) {
 
   return result;
 }
+
+// ================================
+// 4. SCORING SYSTEM
+// ================================
 
 function calculateScore(evaluation, isCorrect) {
   let score = 0;
@@ -111,28 +81,65 @@ function calculateScore(evaluation, isCorrect) {
   return score;
 }
 
-function json(data) {
+// ================================
+// 5. RESPONSE HELPERS
+// ================================
+
+function json(body) {
   return {
     statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*"
+    },
+    body: JSON.stringify(body)
   };
 }
 
-/* =========================
-   DAILY GAME STORAGE (TEMP MOCK)
-========================= */
+// ================================
+// 6. MAIN HANDLER
+// ================================
 
-let memoryGame = {
-  date: new Date().toISOString().split("T")[0],
-  word: "apple",
-  solved: false
-};
+export async function handler(event) {
+  try {
+    const { guess } = JSON.parse(event.body || "{}");
 
-async function getDailyGame() {
-  return memoryGame;
-}
+    if (!guess || guess.length !== 5) {
+      return json({
+        evaluation: null,
+        score: 0,
+        isCorrect: false,
+        gameLocked: false,
+        message: "Enter a 5-letter word."
+      });
+    }
 
-async function lockGame(date) {
-  memoryGame.solved = true;
+    const word = getDailyWord();
+    const cleanGuess = guess.toLowerCase();
+
+    const evaluation = evaluate(cleanGuess, word);
+    const isCorrect = cleanGuess === word;
+    const score = calculateScore(evaluation, isCorrect);
+
+    return json({
+      evaluation,
+      score,
+      isCorrect,
+      gameLocked: isCorrect,
+      message: isCorrect
+        ? "Correct."
+        : "Not it."
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    return json({
+      evaluation: null,
+      score: 0,
+      isCorrect: false,
+      gameLocked: false,
+      message: "Server error."
+    });
+  }
 }
