@@ -74,8 +74,8 @@ p {
 }
 
 .correct { background:#538d4e; border-color:#538d4e; }
-.present { background:#b59f3b; border-color:#b59f3b; }
-.absent  { background:#3a3a3c; border-color:#3a3a3c; }
+.present  { background:#b59f3b; border-color:#b59f3b; }
+.absent   { background:#3a3a3c; border-color:#3a3a3c; }
 
 /* INPUT */
 input {
@@ -115,6 +115,12 @@ button {
   font-size: 14px;
   min-height: 20px;
   opacity: 0.9;
+}
+
+/* SHARE */
+#shareBtn {
+  margin-top: 10px;
+  display: none;
 }
 
 /* ANIMATIONS */
@@ -161,7 +167,7 @@ button {
 
     <div id="message"></div>
 
-    <button id="shareBtn" style="display:none;">Share Result</button>
+    <button id="shareBtn">Share Result</button>
 
   </div>
 </div>
@@ -177,8 +183,8 @@ const shareBtn = document.getElementById("shareBtn");
 
 let guess = "";
 let locked = false;
-let lastResult = null;
 let evaluation = null;
+let lastResult = null;
 
 window.addEventListener("load", () => {
   setTimeout(() => guessInput.focus(), 250);
@@ -240,21 +246,37 @@ async function submit() {
 
     const data = await res.json();
 
-    console.log("RESPONSE:", data);
+    console.log("GAME ENGINE RESPONSE:", data);
 
-    lastResult = data.result;
     evaluation = data.evaluation;
 
-    msg.textContent =
-      data.message ||
-      (data.result === "correct" ? "Correct." : "Wrong.");
+    // backend is source of truth
+    msg.textContent = data.message || "";
+
+    if (data.score !== undefined) {
+      msg.textContent += ` (+${data.score})`;
+    }
+
+    lastResult = data.isCorrect ? "correct" : "wrong";
 
     if (evaluation) reveal(evaluation);
 
     shareBtn.style.display = "block";
 
+    if (data.gameLocked || data.isCorrect) {
+      locked = true;
+      btn.disabled = true;
+      guessInput.disabled = true;
+    } else {
+      locked = false;
+      btn.disabled = false;
+    }
+
   } catch (e) {
+    console.error(e);
     msg.textContent = "Error submitting guess.";
+    locked = false;
+    btn.disabled = false;
   }
 }
 
