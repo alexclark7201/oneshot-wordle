@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>One Shot</title>
+
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #121213;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+h1 {
+  letter-spacing: 3px;
+  margin-bottom: 6px;
+}
+
+p {
+  opacity: 0.8;
+  margin-top: 0;
+}
+
+/* GRID */
+.tiles {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 20px 0 10px;
+}
+
+.tile {
+  width: 52px;
+  height: 52px;
+  border: 2px solid #3a3a3c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+/* COLORS */
+.tile.correct {
+  background: #538d4e;
+  border-color: #538d4e;
+}
+
+.tile.present {
+  background: #b59f3b;
+  border-color: #b59f3b;
+}
+
+.tile.absent {
+  background: #3a3a3c;
+  border-color: #3a3a3c;
+}
+
+/* INPUT */
+.inputHint {
+  font-size: 13px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+#guessInput, #email {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  font-size: 16px;
+  background: #1a1a1b;
+  border: 2px solid #3a3a3c;
+  color: white;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: #538d4e;
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* MESSAGE */
+#message {
+  margin-top: 18px;
+  min-height: 24px;
+  font-weight: bold;
+}
+
+/* SHAKE ANIMATION */
+.shake {
+  animation: shake 0.4s ease;
+}
+
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-5px); }
+}
+
+/* FLIP ANIMATION */
+.flip {
+  animation: flip 0.5s ease forwards;
+  transform-style: preserve-3d;
+}
+
+@keyframes flip {
+  0% { transform: rotateX(0); }
+  50% { transform: rotateX(90deg); }
+  100% { transform: rotateX(0); }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>ONE SHOT</h1>
+  <p>One guess. Make it count.</p>
+
+  <div class="tiles" id="tiles">
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+  </div>
+
+  <div class="inputHint">Type your 5-letter guess</div>
+
+  <input id="guessInput" maxlength="5" autocomplete="off" autocapitalize="none" />
+  <input id="email" placeholder="email" />
+
+  <button id="submitBtn">Submit</button>
+
+  <div id="message"></div>
+
+</div>
+
+<script>
+const tiles = document.querySelectorAll(".tile");
+const guessInput = document.getElementById("guessInput");
+const emailInput = document.getElementById("email");
+const message = document.getElementById("message");
+const submitBtn = document.getElementById("submitBtn");
+
+const snark = [
+  "Wow. That was confidently wrong.",
+  "Not even close.",
+  "You had one job.",
+  "That’s impressively bad.",
+  "Respectfully… no.",
+  "Did you even try?",
+  "Incorrect. As expected.",
+  "That was painful."
+];
+
+let guess = "";
+let locked = false;
+
+/* INPUT */
+guessInput.addEventListener("input", () => {
+  guess = guessInput.value.toLowerCase().replace(/[^a-z]/g, "").slice(0,5);
+  guessInput.value = guess;
+  render();
+});
+
+function render() {
+  tiles.forEach((t,i) => {
+    t.textContent = guess[i] || "";
+  });
+}
+
+/* SHAKE */
+function shake() {
+  tiles.forEach(t => {
+    t.classList.add("shake");
+    setTimeout(() => t.classList.remove("shake"), 400);
+  });
+}
+
+/* FLIP REVEAL */
+function reveal(result) {
+  tiles.forEach((tile, i) => {
+    setTimeout(() => {
+      tile.classList.add("flip");
+      setTimeout(() => {
+        tile.classList.add(result);
+      }, 250);
+    }, i * 200);
+  });
+}
+
+/* SUBMIT */
+submitBtn.addEventListener("click", submitGuess);
+
+async function submitGuess() {
+  if (locked) return;
+
+  const email = emailInput.value.trim();
+
+  if (guess.length !== 5 || !email) {
+    message.innerText = "Enter 5 letters + email.";
+    shake();
+    return;
+  }
+
+  locked = true;
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch("/.netlify/functions/game", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ email, guess })
+    });
+
+    const data = await res.json();
+
+    if (data.result === "correct") {
+      reveal("correct");
+      message.style.color = "#538d4e";
+      message.innerText = "Correct.";
+    }
+
+    else if (data.result === "already_used") {
+      message.style.color = "#ffb020";
+      message.innerText = "Already used today.";
+    }
+
+    else {
+      reveal("absent");
+      message.style.color = "#e91e63";
+      message.innerText = snark[Math.floor(Math.random()*snark.length)];
+    }
+
+  } catch (e) {
+    message.innerText = "Backend error.";
+    console.error(e);
+  }
+}
+</script>
+
+</body>
+</html>
