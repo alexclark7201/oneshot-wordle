@@ -5,14 +5,14 @@ export async function handler(event) {
     if (!email || !guess || guess.length !== 5) {
       return json({
         result: "invalid",
-        message: "Missing email or invalid guess."
+        message: "Enter a 5-letter word + email."
       });
     }
 
-    const word = await getDailyWord(); // replace with your Supabase logic
+    const word = await getDailyWord();
 
-    const normalizedGuess = guess.toLowerCase();
-    const normalizedWord = word.toLowerCase();
+    const cleanGuess = guess.toLowerCase();
+    const cleanWord = word.toLowerCase();
 
     const alreadyUsed = await checkIfUsedToday(email);
     if (alreadyUsed) {
@@ -22,53 +22,52 @@ export async function handler(event) {
       });
     }
 
-    const evaluation = evaluateGuess(normalizedGuess, normalizedWord);
-    const isCorrect = normalizedGuess === normalizedWord;
+    const evaluation = evaluate(cleanGuess, cleanWord);
+    const isCorrect = cleanGuess === cleanWord;
 
-    await storeResult(email, normalizedGuess, isCorrect);
+    await storeResult(email, cleanGuess, isCorrect);
 
-    return json({
+    const payload = {
       result: isCorrect ? "correct" : "incorrect",
       evaluation,
       message: isCorrect
         ? getWinMessage()
         : getLossMessage()
-    });
+    };
+
+    return json(payload);
 
   } catch (err) {
     return json({
       result: "error",
-      message: "Server error. Try again."
+      message: "Server error."
     });
   }
 }
 
 /* =========================
-   WORDLE EVALUATION ENGINE
+   WORDLE EVALUATION
 ========================= */
 
-function evaluateGuess(guess, word) {
+function evaluate(guess, word) {
   const result = Array(5).fill("absent");
-  const wordArr = word.split("");
-  const guessArr = guess.split("");
+  const w = word.split("");
+  const g = guess.split("");
 
-  // correct first pass
   for (let i = 0; i < 5; i++) {
-    if (guessArr[i] === wordArr[i]) {
+    if (g[i] === w[i]) {
       result[i] = "correct";
-      wordArr[i] = null;
-      guessArr[i] = null;
+      w[i] = null;
+      g[i] = null;
     }
   }
 
-  // present second pass
   for (let i = 0; i < 5; i++) {
-    if (!guessArr[i]) continue;
-
-    const idx = wordArr.indexOf(guessArr[i]);
+    if (!g[i]) continue;
+    const idx = w.indexOf(g[i]);
     if (idx !== -1) {
       result[i] = "present";
-      wordArr[idx] = null;
+      w[idx] = null;
     }
   }
 
@@ -76,39 +75,32 @@ function evaluateGuess(guess, word) {
 }
 
 /* =========================
-   WIN / LOSS MESSAGES
-   (UPGRADED “JAB SYSTEM”)
+   MESSAGES (UPGRADED BUT SAFE)
 ========================= */
 
 function getWinMessage() {
   const msgs = [
     "Clean hit.",
-    "Alright, you got it.",
-    "Perfect. Nothing to say here.",
-    "That’s the one."
+    "Nice. You got it.",
+    "Perfect.",
+    "That’s it."
   ];
   return pick(msgs);
 }
 
 function getLossMessage() {
   const msgs = [
-    "Nope. That was genuinely off the mark.",
-    "Not even close — impressive confidence though.",
-    "That guess didn’t stand a chance.",
-    "You were aiming in the right zip code, just not this planet.",
-    "That’s not the word. That’s just noise.",
+    "Nope.",
+    "Not even close.",
+    "That guess didn’t land anywhere near it.",
+    "You were guessing in another universe.",
     "Respectfully… what was that?",
-    "You missed by a lot. Like, a lot a lot.",
+    "That was confidently incorrect.",
     "That one hurt to watch.",
-    "If guessing wrong was the goal, you nailed it.",
-    "That’s not it. Not remotely.",
-    "You were swinging blindfolded in a different stadium.",
-    "That guess should probably stay private.",
-    "I’ve seen better guesses from autocomplete.",
-    "That was creative. Incorrect, but creative.",
-    "You’re playing a different game entirely."
+    "You missed by a lot.",
+    "I’ve seen better guesses from random typing.",
+    "That wasn’t it."
   ];
-
   return pick(msgs);
 }
 
@@ -117,7 +109,7 @@ function pick(arr) {
 }
 
 /* =========================
-   HELPERS
+   RESPONSE WRAPPER
 ========================= */
 
 function json(data) {
@@ -129,8 +121,7 @@ function json(data) {
 }
 
 /* =========================
-   PLACEHOLDER LOGIC
-   (REPLACE WITH SUPABASE)
+   PLACEHOLDERS (REPLACE LATER)
 ========================= */
 
 async function getDailyWord() {
