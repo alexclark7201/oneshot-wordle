@@ -1,52 +1,73 @@
 export async function handler(event) {
   try {
-    const { email, guess } = JSON.parse(event.body || "{}");
+    const { guess } = JSON.parse(event.body || "{}");
 
-    if (!email || !guess || guess.length !== 5) {
+    if (!guess || guess.length !== 5) {
       return json({
-        result: "invalid",
-        message: "Enter a 5-letter word + email."
+        error: "invalid_guess",
+        message: "Enter a 5-letter word."
       });
     }
 
-    const word = await getDailyWord();
+    // =========================
+    // 1. LOAD DAILY GAME STATE
+    // =========================
+    const game = await getDailyGame();
 
+    if (game.solved) {
+      return json({
+        evaluation: null,
+        score: 0,
+        isCorrect: false,
+        gameLocked: true,
+        message: `Game over. The word was ${game.word}.`
+      });
+    }
+
+    const word = game.word.toLowerCase();
     const cleanGuess = guess.toLowerCase();
-    const cleanWord = word.toLowerCase();
 
-    const alreadyUsed = await checkIfUsedToday(email);
-    if (alreadyUsed) {
-      return json({
-        result: "already_used",
-        message: "You already used today’s shot."
-      });
+    // =========================
+    // 2. EVALUATE GUESS
+    // =========================
+    const evaluation = evaluate(cleanGuess, word);
+
+    const isCorrect = cleanGuess === word;
+
+    // =========================
+    // 3. CALCULATE SCORE
+    // =========================
+    const score = calculateScore(evaluation, isCorrect);
+
+    // =========================
+    // 4. LOCK GAME IF WON
+    // =========================
+    if (isCorrect) {
+      await lockGame(game.date);
     }
 
-    const evaluation = evaluate(cleanGuess, cleanWord);
-    const isCorrect = cleanGuess === cleanWord;
-
-    await storeResult(email, cleanGuess, isCorrect);
-
-    const payload = {
-      result: isCorrect ? "correct" : "incorrect",
+    return json({
       evaluation,
+      score,
+      isCorrect,
+      gameLocked: isCorrect,
       message: isCorrect
-        ? getWinMessage()
-        : getLossMessage()
-    };
-
-    return json(payload);
+        ? "You got it. Clean."
+        : "Not it."
+    });
 
   } catch (err) {
     return json({
-      result: "error",
-      message: "Server error."
+      error: "server_error",
+      message: "Something broke."
     });
   }
 }
 
+---
+
 /* =========================
-   WORDLE EVALUATION
+   GAME ENGINE CORE
 ========================= */
 
 function evaluate(guess, word) {
@@ -54,6 +75,7 @@ function evaluate(guess, word) {
   const w = word.split("");
   const g = guess.split("");
 
+  // correct pass
   for (let i = 0; i < 5; i++) {
     if (g[i] === w[i]) {
       result[i] = "correct";
@@ -62,8 +84,10 @@ function evaluate(guess, word) {
     }
   }
 
+  // present pass
   for (let i = 0; i < 5; i++) {
     if (!g[i]) continue;
+
     const idx = w.indexOf(g[i]);
     if (idx !== -1) {
       result[i] = "present";
@@ -74,43 +98,18 @@ function evaluate(guess, word) {
   return result;
 }
 
-/* =========================
-   MESSAGES (UPGRADED BUT SAFE)
-========================= */
+function calculateScore(evaluation, isCorrect) {
+  let score = 0;
 
-function getWinMessage() {
-  const msgs = [
-    "Clean hit.",
-    "Nice. You got it.",
-    "Perfect.",
-    "That’s it."
-  ];
-  return pick(msgs);
+  for (let i = 0; i < evaluation.length; i++) {
+    if (evaluation[i] === "correct") score += 5;
+    if (evaluation[i] === "present") score += 1;
+  }
+
+  if (isCorrect) score += 50;
+
+  return score;
 }
-
-function getLossMessage() {
-  const msgs = [
-    "Nope.",
-    "Not even close.",
-    "That guess didn’t land anywhere near it.",
-    "You were guessing in another universe.",
-    "Respectfully… what was that?",
-    "That was confidently incorrect.",
-    "That one hurt to watch.",
-    "You missed by a lot.",
-    "I’ve seen better guesses from random typing.",
-    "That wasn’t it."
-  ];
-  return pick(msgs);
-}
-
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/* =========================
-   RESPONSE WRAPPER
-========================= */
 
 function json(data) {
   return {
@@ -121,17 +120,19 @@ function json(data) {
 }
 
 /* =========================
-   PLACEHOLDERS (REPLACE LATER)
+   DAILY GAME STORAGE (TEMP MOCK)
 ========================= */
 
-async function getDailyWord() {
-  return "apple";
+let memoryGame = {
+  date: new Date().toISOString().split("T")[0],
+  word: "apple",
+  solved: false
+};
+
+async function getDailyGame() {
+  return memoryGame;
 }
 
-async function checkIfUsedToday(email) {
-  return false;
-}
-
-async function storeResult(email, guess, isCorrect) {
-  return true;
+async function lockGame(date) {
+  memoryGame.solved = true;
 }
