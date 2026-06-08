@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>One Shot</title>
+
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #121213;
+  color: white;
+  font-family: Arial;
+}
+
+/* stable centering */
+body {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+h1 {
+  margin-bottom: 6px;
+  letter-spacing: 3px;
+}
+
+p {
+  margin-top: 0;
+  opacity: 0.8;
+}
+
+/* tile row */
+.tiles {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.tile {
+  width: 52px;
+  height: 52px;
+  border: 2px solid #3a3a3c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+/* active tile */
+.tile.active {
+  border-color: #818384;
+}
+
+/* input (VISIBLE — intentional) */
+#guessInput {
+  width: 100%;
+  padding: 12px;
+  font-size: 18px;
+  letter-spacing: 6px;
+  text-align: center;
+  margin-top: 10px;
+
+  background: #1a1a1b;
+  border: 2px solid #3a3a3c;
+  color: white;
+  box-sizing: border-box;
+}
+
+#email {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  background: #1a1a1b;
+  border: 2px solid #3a3a3c;
+  color: white;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: #538d4e;
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#message {
+  margin-top: 18px;
+  min-height: 24px;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>ONE SHOT</h1>
+  <p>Type your 5-letter guess below</p>
+
+  <div class="tiles" id="tiles">
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+    <div class="tile"></div>
+  </div>
+
+  <input id="guessInput"
+         placeholder="Enter 5-letter word (e.g. TRAIN)"
+         maxlength="5"
+         autocomplete="off"
+         autocapitalize="none" />
+
+  <input id="email" placeholder="email" />
+
+  <button id="submitBtn">Submit</button>
+
+  <div id="message"></div>
+
+</div>
+
+<script>
+const tiles = document.querySelectorAll(".tile");
+const guessInput = document.getElementById("guessInput");
+const emailInput = document.getElementById("email");
+const message = document.getElementById("message");
+const submitBtn = document.getElementById("submitBtn");
+
+let guess = "";
+let locked = false;
+
+/* CORE INPUT HANDLER */
+guessInput.addEventListener("input", () => {
+  if (locked) return;
+
+  guess = guessInput.value
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+    .slice(0, 5);
+
+  guessInput.value = guess;
+
+  render();
+});
+
+/* highlight active tile like Wordle cursor */
+guessInput.addEventListener("keyup", () => {
+  render();
+});
+
+function render() {
+  tiles.forEach((tile, i) => {
+    tile.textContent = guess[i] || "";
+
+    tile.classList.toggle("active", i === guess.length);
+  });
+}
+
+/* submit */
+submitBtn.addEventListener("click", submitGuess);
+
+async function submitGuess() {
+  if (locked) return;
+
+  const email = emailInput.value.trim();
+
+  if (guess.length !== 5 || !email) {
+    message.innerText = "Enter a 5-letter word + email.";
+    return;
+  }
+
+  locked = true;
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch("/.netlify/functions/game", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, guess })
+    });
+
+    const data = await res.json();
+
+    if (data.result === "correct") {
+      message.style.color = "#538d4e";
+      message.innerText = "Correct.";
+    } else if (data.result === "already_used") {
+      message.style.color = "#ffb020";
+      message.innerText = "Already used today.";
+    } else {
+      message.style.color = "#e91e63";
+      message.innerText = "Incorrect.";
+    }
+
+  } catch (err) {
+    message.innerText = "Error submitting guess.";
+    console.error(err);
+  }
+}
+</script>
+
+</body>
+</html>
