@@ -1,135 +1,146 @@
-const { createClient } = require("@supabase/supabase-js");
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
-
-/* WORD LIST */
-const words = [
-"about","above","actor","acute","adapt","admin","admit","adopt","adult","after",
-"again","agent","agree","ahead","alarm","album","alert","alike","alive","allow",
-"alone","along","alter","among","anger","angle","angry","apart","apple","apply",
-"arena","argue","arise","array","aside","asset","audio","audit","avoid","award",
-"aware","badly","baker","basic","beach","begin","below","black","blind","block",
-"board","brain","brand","bread","break","bring","brown","build","cable","carry",
-"catch","chain","chair","chase","cheap","check","child","claim","clean","clear",
-"clock","close","cloud","could","count","court","cover","craft","crash","cream",
-"crime","cross","crowd","dance","death","delay","depth","doubt","dream","drink",
-"drive","earth","empty","enemy","enjoy","enter","equal","event","every","faith",
-"fault","field","fight","final","first","focus","force","frame","fresh","front",
-"fruit","giant","glass","great","green","group","guard","happy","heart","heavy",
-"horse","house","human","image","issue","large","later","laugh","learn","light",
-"limit","local","lucky","magic","major","maker","money","month","music","night",
-"noise","north","ocean","offer","order","other","place","plant","point","power",
-"price","pride","print","prize","queen","quick","quiet","radio","reach","ready",
-"river","rough","round","scale","scene","scope","serve","shape","share","sharp",
-"short","sight","skill","small","smart","smile","sound","space","speak","speed",
-"spend","stand","start","state","stick","still","store","storm","story","study",
-"table","teach","terms","thank","their","theme","there","these","thing","think",
-"three","today","topic","total","touch","trade","train","treat","trust","truth",
-"under","union","value","video","voice","water","wheel","where","which","while",
-"white","whole","woman","world","write","wrong","youth"
-];
-
-function getDay() {
-  const now = new Date();
-  const pst = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  );
-  return pst.toISOString().slice(0, 10);
-}
-
-function getWord(day) {
-  let hash = 0;
-  for (let i = 0; i < day.length; i++) {
-    hash = (hash << 5) - hash + day.charCodeAt(i);
-    hash |= 0;
-  }
-  return words[Math.abs(hash) % words.length];
-}
-
-/* WORDLE EVALUATION */
-function evaluate(guess, word) {
-  const res = Array(5).fill("absent");
-  const target = word.split("");
-
-  // correct
-  for (let i = 0; i < 5; i++) {
-    if (guess[i] === target[i]) {
-      res[i] = "correct";
-      target[i] = null;
-    }
-  }
-
-  // present
-  for (let i = 0; i < 5; i++) {
-    if (res[i] === "correct") continue;
-    const idx = target.indexOf(guess[i]);
-    if (idx !== -1) {
-      res[i] = "present";
-      target[idx] = null;
-    }
-  }
-
-  return res;
-}
-
-exports.handler = async (event) => {
+export async function handler(event) {
   try {
-    if (event.httpMethod !== "POST") {
-      return json(405, { error: "Method not allowed" });
-    }
-
     const { email, guess } = JSON.parse(event.body || "{}");
 
-    const cleanEmail = email?.toLowerCase().trim();
-    const cleanGuess = guess?.toLowerCase().trim();
-
-    if (!cleanEmail || !cleanGuess) {
-      return json(400, { error: "Missing data" });
+    if (!email || !guess || guess.length !== 5) {
+      return json({
+        result: "invalid",
+        message: "Missing email or invalid guess."
+      });
     }
 
-    const day = getDay();
-    const word = getWord(day);
+    const word = await getDailyWord(); // replace with your Supabase logic
 
-    // prevent multiple plays
-    const { data: existing } = await supabase
-      .from("guesses")
-      .select("id")
-      .eq("email", cleanEmail)
-      .eq("game_day", day);
+    const normalizedGuess = guess.toLowerCase();
+    const normalizedWord = word.toLowerCase();
 
-    if (existing?.length) {
-      return json(200, { result: "already_used" });
+    const alreadyUsed = await checkIfUsedToday(email);
+    if (alreadyUsed) {
+      return json({
+        result: "already_used",
+        message: "You already used today’s shot."
+      });
     }
 
-    const correct = cleanGuess === word;
-    const evaluation = evaluate(cleanGuess, word);
+    const evaluation = evaluateGuess(normalizedGuess, normalizedWord);
+    const isCorrect = normalizedGuess === normalizedWord;
 
-    await supabase.from("guesses").insert([{
-      email: cleanEmail,
-      guess: cleanGuess,
-      correct,
-      game_day: day
-    }]);
+    await storeResult(email, normalizedGuess, isCorrect);
 
-    return json(200, {
-      result: correct ? "correct" : "incorrect",
+    return json({
+      result: isCorrect ? "correct" : "incorrect",
       evaluation,
-      word // optional debug (you can remove later)
+      message: isCorrect
+        ? getWinMessage()
+        : getLossMessage()
     });
 
   } catch (err) {
-    console.error(err);
-    return json(500, { error: err.message });
+    return json({
+      result: "error",
+      message: "Server error. Try again."
+    });
   }
-};
+}
 
-function json(status, body) {
+/* =========================
+   WORDLE EVALUATION ENGINE
+========================= */
+
+function evaluateGuess(guess, word) {
+  const result = Array(5).fill("absent");
+  const wordArr = word.split("");
+  const guessArr = guess.split("");
+
+  // correct first pass
+  for (let i = 0; i < 5; i++) {
+    if (guessArr[i] === wordArr[i]) {
+      result[i] = "correct";
+      wordArr[i] = null;
+      guessArr[i] = null;
+    }
+  }
+
+  // present second pass
+  for (let i = 0; i < 5; i++) {
+    if (!guessArr[i]) continue;
+
+    const idx = wordArr.indexOf(guessArr[i]);
+    if (idx !== -1) {
+      result[i] = "present";
+      wordArr[idx] = null;
+    }
+  }
+
+  return result;
+}
+
+/* =========================
+   WIN / LOSS MESSAGES
+   (UPGRADED “JAB SYSTEM”)
+========================= */
+
+function getWinMessage() {
+  const msgs = [
+    "Clean hit.",
+    "Alright, you got it.",
+    "Perfect. Nothing to say here.",
+    "That’s the one."
+  ];
+  return pick(msgs);
+}
+
+function getLossMessage() {
+  const msgs = [
+    "Nope. That was genuinely off the mark.",
+    "Not even close — impressive confidence though.",
+    "That guess didn’t stand a chance.",
+    "You were aiming in the right zip code, just not this planet.",
+    "That’s not the word. That’s just noise.",
+    "Respectfully… what was that?",
+    "You missed by a lot. Like, a lot a lot.",
+    "That one hurt to watch.",
+    "If guessing wrong was the goal, you nailed it.",
+    "That’s not it. Not remotely.",
+    "You were swinging blindfolded in a different stadium.",
+    "That guess should probably stay private.",
+    "I’ve seen better guesses from autocomplete.",
+    "That was creative. Incorrect, but creative.",
+    "You’re playing a different game entirely."
+  ];
+
+  return pick(msgs);
+}
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/* =========================
+   HELPERS
+========================= */
+
+function json(data) {
   return {
-    statusCode: status,
+    statusCode: 200,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(data)
   };
+}
+
+/* =========================
+   PLACEHOLDER LOGIC
+   (REPLACE WITH SUPABASE)
+========================= */
+
+async function getDailyWord() {
+  return "apple";
+}
+
+async function checkIfUsedToday(email) {
+  return false;
+}
+
+async function storeResult(email, guess, isCorrect) {
+  return true;
 }
