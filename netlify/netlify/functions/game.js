@@ -1,19 +1,18 @@
 const { createClient } = require("@supabase/supabase-js");
 
-/* Supabase client */
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
 );
 
-/* WORD LIST (expandable) */
+/* WORD LIST */
 const words = [
   "apple","react","ghost","pixel","shark","train","world","beach","flame","heavy",
   "magic","tiger","water","solar","vivid","storm","crane","brave","light","smile",
   "stone","pride","sword","orbit","drift","smash","trace","globe","prism","cable"
 ];
 
-/* PST DAY (3AM EST reset equivalent) */
+/* PST DAY */
 function getDay() {
   const now = new Date();
   const pst = new Date(
@@ -37,14 +36,14 @@ exports.handler = async (event) => {
     const { email, guess } = JSON.parse(event.body);
 
     if (!email || !guess) {
-      return json({ result: "error", message: "missing fields" });
+      return json({ result: "error" });
     }
 
     const normEmail = email.toLowerCase().trim();
     const day = getDay();
     const word = getWord(day);
 
-    /* check if already played today */
+    /* check duplicate */
     const { data: existing, error: fetchError } = await supabase
       .from("guesses")
       .select("id")
@@ -63,7 +62,7 @@ exports.handler = async (event) => {
 
     const correct = guess.toLowerCase() === word;
 
-    /* insert attempt */
+    /* insert */
     const { error: insertError } = await supabase
       .from("guesses")
       .insert([
