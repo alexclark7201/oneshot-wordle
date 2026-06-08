@@ -5,14 +5,12 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
-/* WORD LIST */
 const words = [
   "apple","react","ghost","pixel","shark","train","world","beach","flame","heavy",
   "magic","tiger","water","solar","vivid","storm","crane","brave","light","smile",
   "stone","pride","sword","orbit","drift","smash","trace","globe","prism","cable"
 ];
 
-/* PST DAY */
 function getDay() {
   const now = new Date();
   const pst = new Date(
@@ -21,7 +19,6 @@ function getDay() {
   return pst.toISOString().slice(0, 10);
 }
 
-/* deterministic word */
 function getWord(day) {
   let hash = 0;
   for (let i = 0; i < day.length; i++) {
@@ -43,18 +40,12 @@ exports.handler = async (event) => {
     const day = getDay();
     const word = getWord(day);
 
-    /* check duplicate */
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing } = await supabase
       .from("guesses")
       .select("id")
       .eq("email", normEmail)
       .eq("game_day", day)
       .limit(1);
-
-    if (fetchError) {
-      console.log(fetchError);
-      return json({ result: "error" });
-    }
 
     if (existing && existing.length > 0) {
       return json({ result: "already_used" });
@@ -62,22 +53,14 @@ exports.handler = async (event) => {
 
     const correct = guess.toLowerCase() === word;
 
-    /* insert */
-    const { error: insertError } = await supabase
-      .from("guesses")
-      .insert([
-        {
-          email: normEmail,
-          guess,
-          correct,
-          game_day: day
-        }
-      ]);
-
-    if (insertError) {
-      console.log(insertError);
-      return json({ result: "error" });
-    }
+    await supabase.from("guesses").insert([
+      {
+        email: normEmail,
+        guess,
+        correct,
+        game_day: day
+      }
+    ]);
 
     return json({
       result: correct ? "correct" : "incorrect"
