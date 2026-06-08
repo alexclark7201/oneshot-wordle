@@ -13,7 +13,7 @@ body {
   display:flex;
   justify-content:center;
   align-items:center;
-  height:100vh;
+  min-height:100vh;
   margin:0;
   padding:20px;
 }
@@ -60,6 +60,7 @@ input {
   border:2px solid #3a3a3c;
   text-align:center;
   font-size:16px;
+  box-sizing:border-box;
 }
 
 button {
@@ -78,12 +79,6 @@ button {
   min-height:24px;
   font-weight:bold;
 }
-
-#winner {
-  margin-top:15px;
-  font-size:14px;
-  opacity:0.7;
-}
 </style>
 </head>
 
@@ -93,7 +88,7 @@ button {
   <h1>ONE SHOT</h1>
   <p>One guess. One word.</p>
 
-  <div class="tiles">
+  <div class="tiles" id="tiles">
     <div class="tile"></div>
     <div class="tile"></div>
     <div class="tile"></div>
@@ -101,14 +96,13 @@ button {
     <div class="tile"></div>
   </div>
 
-  <!-- Hidden but usable input -->
+  <!-- REAL INPUT (hidden visually but active) -->
   <input id="guessInput" maxlength="5" autocomplete="off" />
   <input id="email" placeholder="email" />
 
   <button onclick="submitGuess()">Submit</button>
 
   <div id="message"></div>
-  <div id="winner"></div>
 </div>
 
 <script>
@@ -116,35 +110,28 @@ let guess = "";
 let locked = false;
 
 const tiles = document.querySelectorAll(".tile");
-const input = document.getElementById("guessInput");
+const guessInput = document.getElementById("guessInput");
+const emailInput = document.getElementById("email");
 const msg = document.getElementById("message");
+const tileArea = document.getElementById("tiles");
 
-const snark = [
-  "Not quite.",
-  "Swing and a miss.",
-  "That didn’t land.",
-  "Close... but no.",
-  "The word disagrees.",
-  "An admirable failure."
-];
+/* ONLY focus guess input when clicking tiles */
+tileArea.addEventListener("click", () => {
+  guessInput.focus();
+});
 
-/* IMPORTANT: fixes mobile typing */
-document.addEventListener("click", () => input.focus());
-
-input.addEventListener("input", (e) => {
+/* typing handler */
+guessInput.addEventListener("input", (e) => {
   if (locked) return;
 
   guess = e.target.value.toLowerCase().slice(0, 5);
   render();
 });
 
-/* backspace + enter support */
-input.addEventListener("keydown", (e) => {
+/* enter submits */
+guessInput.addEventListener("keydown", (e) => {
   if (locked) return;
-
-  if (e.key === "Enter") {
-    submitGuess();
-  }
+  if (e.key === "Enter") submitGuess();
 });
 
 function render() {
@@ -157,10 +144,10 @@ function render() {
 async function submitGuess() {
   if (locked) return;
 
-  const email = document.getElementById("email").value.trim();
+  const email = emailInput.value.trim();
 
   if (guess.length !== 5 || !email) {
-    msg.innerText = "Enter a 5-letter guess and email.";
+    msg.innerText = "Enter a 5-letter word + email.";
     return;
   }
 
@@ -176,17 +163,15 @@ async function submitGuess() {
 
   if (data.result === "correct") {
     msg.style.color = "#538d4e";
-    msg.innerText = "Correct. Barely, but correct.";
-  }
-
+    msg.innerText = "Correct.";
+  } 
   else if (data.result === "already_used") {
     msg.style.color = "#ffb020";
-    msg.innerText = "You already used your shot today.";
-  }
-
+    msg.innerText = "Already used your shot today.";
+  } 
   else {
     msg.style.color = "#e91e63";
-    msg.innerText = snark[Math.floor(Math.random() * snark.length)];
+    msg.innerText = "Incorrect.";
   }
 }
 </script>
