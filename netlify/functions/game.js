@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 // ===============================
-// SUPABASE CLIENT (SERVER ONLY)
+// SUPABASE CLIENT
 // ===============================
 
 const supabase = createClient(
@@ -21,7 +21,7 @@ const WORDS = [
 ];
 
 // ===============================
-// DAILY WORD (DETERMINISTIC)
+// DAILY WORD
 // ===============================
 
 function getDailyWord() {
@@ -54,7 +54,6 @@ function evaluate(guess, word) {
   const w = word.split("");
   const g = guess.split("");
 
-  // correct pass
   for (let i = 0; i < 5; i++) {
     if (g[i] === w[i]) {
       result[i] = "correct";
@@ -63,7 +62,6 @@ function evaluate(guess, word) {
     }
   }
 
-  // present pass
   for (let i = 0; i < 5; i++) {
     if (!g[i]) continue;
 
@@ -95,7 +93,7 @@ function calculateScore(evaluation, isCorrect) {
 }
 
 // ===============================
-// NETLIFY RESPONSE
+// RESPONSE HELPER
 // ===============================
 
 function json(body) {
@@ -110,11 +108,11 @@ function json(body) {
 }
 
 // ===============================
-// GET OR CREATE DAILY GAME
+// GAME STATE
 // ===============================
 
 async function getOrCreateGame(dateKey, word) {
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("daily_games")
     .select("*")
     .eq("date", dateKey)
@@ -137,10 +135,6 @@ async function getOrCreateGame(dateKey, word) {
   };
 }
 
-// ===============================
-// LOCK GAME
-// ===============================
-
 async function lockGame(dateKey, winner) {
   await supabase
     .from("daily_games")
@@ -153,20 +147,51 @@ async function lockGame(dateKey, winner) {
 }
 
 // ===============================
+// USER SYSTEM (NEW)
+// ===============================
+
+async function getOrCreateUserFromEmail(email) {
+
+  const username = email.split("@")[0];
+
+  const { data: existing } = await supabase
+    .from("users")
+    .select("*")
+    .eq("username", username)
+    .single();
+
+  if (existing) return existing;
+
+  const { data: created, error } = await supabase
+    .from("users")
+    .insert({
+      username,
+      phone: email
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return created;
+}
+
+// ===============================
 // HANDLER
 // ===============================
 
 export async function handler(event) {
   try {
-    const { guess } = JSON.parse(event.body || "{}");
 
-    if (!guess || guess.length !== 5) {
+    const { guess, email } = JSON.parse(event.body || "{}");
+
+    if (!guess || guess.length !== 5 || !email) {
       return json({
         evaluation: null,
         score: 0,
         isCorrect: false,
         gameLocked: false,
-        message: "Enter a 5-letter word."
+        message: "Enter email + 5-letter word."
       });
     }
 
@@ -182,7 +207,23 @@ export async function handler(event) {
     const score = calculateScore(evaluation, isCorrect);
 
     // ===============================
-    // GAME ALREADY LOCKED
+    // USER CREATION (NEW)
+    // ===============================
+
+    const user = await getOrCreateUserFromEmail(email);
+
+    // ===============================
+    // SAVE SCORE (NEW)
+    // ===============================
+
+    await supabase.from("scores").insert({
+      user_id: user.id,
+      username: user.username,
+      score
+    });
+
+    // ===============================
+    // GAME LOCK LOGIC
     // ===============================
 
     if (game.solved) {
@@ -196,12 +237,8 @@ export async function handler(event) {
       });
     }
 
-    // ===============================
-    // FIRST WINNER LOGIC
-    // ===============================
-
     if (isCorrect) {
-      await lockGame(todayKey, "Player");
+      await lockGame(todayKey, user.username);
     }
 
     return json({
@@ -209,9 +246,9 @@ export async function handler(event) {
       score,
       isCorrect,
       gameLocked: isCorrect,
-      winner: isCorrect ? "Player" : null,
+      winner: isCorrect ? user.username : null,
       message: isCorrect
-        ? "You solved it. First today."
+        ? `🏆 ${user.username} solved today's puzzle.`
         : "Not it."
     });
 
