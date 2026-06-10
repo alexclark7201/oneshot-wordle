@@ -196,8 +196,7 @@ const emailInput = document.getElementById("email");
 const msg = document.getElementById("message");
 const btn = document.getElementById("submitBtn");
 const shareBtn = document.getElementById("shareBtn");
-const leaderboardEntries =
-  document.getElementById("leaderboardEntries");  
+const leaderboardEntries = document.getElementById("leaderboardEntries");
 
 let guess = "";
 let locked = false;
@@ -209,12 +208,14 @@ window.addEventListener("load", () => {
 });
 
 guessInput.addEventListener("input", () => {
+
   guess = guessInput.value
     .toLowerCase()
     .replace(/[^a-z]/g, "")
     .slice(0,5);
 
   guessInput.value = guess;
+
   render();
 });
 
@@ -225,22 +226,35 @@ function render() {
 function shake() {
   tiles.forEach(t => {
     t.classList.add("shake");
-    setTimeout(() => t.classList.remove("shake"), 350);
+
+    setTimeout(() => {
+      t.classList.remove("shake");
+    }, 350);
   });
 }
 
 function reveal(arr) {
+
   tiles.forEach((t,i) => {
+
     setTimeout(() => {
+
       t.classList.add("flip");
-      setTimeout(() => t.classList.add(arr[i]), 200);
+
+      setTimeout(() => {
+        t.classList.add(arr[i]);
+      }, 200);
+
     }, i * 170);
+
   });
+
 }
 
 btn.addEventListener("click", submit);
 
 async function submit() {
+
   if (locked) return;
 
   const email = emailInput.value.trim();
@@ -256,6 +270,7 @@ async function submit() {
   guessInput.blur();
 
   try {
+
     const res = await fetch("/.netlify/functions/game", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
@@ -268,7 +283,6 @@ async function submit() {
 
     evaluation = data.evaluation;
 
-    // backend is source of truth
     msg.textContent = data.message || "";
 
     if (data.score !== undefined) {
@@ -281,18 +295,27 @@ async function submit() {
 
     shareBtn.style.display = "block";
 
+    loadLeaderboard();
+
     if (data.gameLocked || data.isCorrect) {
+
       locked = true;
       btn.disabled = true;
       guessInput.disabled = true;
+
     } else {
+
       locked = false;
       btn.disabled = false;
+
     }
 
   } catch (e) {
+
     console.error(e);
+
     msg.textContent = "Error submitting guess.";
+
     locked = false;
     btn.disabled = false;
   }
@@ -303,7 +326,13 @@ shareBtn.addEventListener("click", async () => {
   const isWin = lastResult === "correct";
 
   const grid = evaluation
-    .map(e => e === "correct" ? "🟩" : e === "present" ? "🟨" : "⬛")
+    .map(e =>
+      e === "correct"
+        ? "🟩"
+        : e === "present"
+          ? "🟨"
+          : "⬛"
+    )
     .join("");
 
   const text =
@@ -317,10 +346,59 @@ https://iridescent-pavlova-31bf43.netlify.app`;
   await navigator.clipboard.writeText(text);
 
   shareBtn.textContent = "Copied!";
-  setTimeout(() => shareBtn.textContent = "Share Result", 1200);
+
+  setTimeout(() => {
+    shareBtn.textContent = "Share Result";
+  }, 1200);
+
 });
 
+async function loadLeaderboard() {
+
+  if (!leaderboardEntries) return;
+
+  try {
+
+    const res =
+      await fetch("/.netlify/functions/leaderboard");
+
+    const data = await res.json();
+
+    leaderboardEntries.innerHTML = "";
+
+    data.forEach((player, index) => {
+
+      const row = document.createElement("div");
+
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.padding = "4px 0";
+
+      row.innerHTML = `
+        <span>${index + 1}. ${player.username}</span>
+        <span>${player.score}</span>
+      `;
+
+      leaderboardEntries.appendChild(row);
+
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    if (leaderboardEntries) {
+      leaderboardEntries.textContent =
+        "Failed to load leaderboard.";
+    }
+
+  }
+}
+
+loadLeaderboard();
+
 </script>
+
 
 </body>
 </html>
