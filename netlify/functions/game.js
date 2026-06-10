@@ -1,13 +1,20 @@
-import { createClient } from "@supabase/supabase-js";
+import admin from "firebase-admin";
 
 // ===============================
-// SUPABASE CLIENT
+// FIREBASE INIT (SAFE FOR NETLIFY)
 // ===============================
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
+    })
+  });
+}
+
+const db = admin.firestore();
 
 // ===============================
 // WORD LIST
@@ -108,72 +115,61 @@ function json(body) {
 }
 
 // ===============================
+// USER SYSTEM
+// ===============================
+
+async function getOrCreateUser(email) {
+  const username = email.split("@")[0];
+
+  const snap = await db
+    .collection("users")
+    .where("username", "==", username)
+    .get();
+
+  if (!snap.empty) {
+    const doc = snap.docs[0];
+    return { id: doc.id, ...doc.data() };
+  }
+
+  const ref = await db.collection("users").add({
+    username,
+    phone: email,
+    createdAt: Date.now()
+  });
+
+  return {
+    id: ref.id,
+    username
+  };
+}
+
+// ===============================
 // GAME STATE
 // ===============================
 
 async function getOrCreateGame(dateKey, word) {
-  const { data } = await supabase
-    .from("daily_games")
-    .select("*")
-    .eq("date", dateKey)
-    .single();
+  const ref = db.collection("games").doc(dateKey);
+  const doc = await ref.get();
 
-  if (data) return data;
+  if (doc.exists) return doc.data();
 
-  await supabase.from("daily_games").insert({
-    date: dateKey,
-    word,
-    solved: false,
-    winner: null
-  });
-
-  return {
+  const game = {
     date: dateKey,
     word,
     solved: false,
     winner: null
   };
+
+  await ref.set(game);
+  return game;
 }
 
 async function lockGame(dateKey, winner) {
-  await supabase
-    .from("daily_games")
-    .update({
-      solved: true,
-      winner,
-      solved_at: new Date().toISOString()
-    })
-    .eq("date", dateKey);
-}
-
-// ===============================
-// USER SYSTEM (NEW)
-// ===============================
-
-async function getOrCreateUserFromEmail(email) {
-
-  const username = email.split("@")[0];
-
-  const { data: existing } = await supabase
-    .from("users")
-    .select("*")
-    .eq("username", username)
-    .single();
-
-  if (existing) return existing;
-
-  const { data: created, error } = await supabase
-    .from("users")
-    .insert({
-      username,
-      phone: email
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  return created;
+  await db.collection("games").doc(dateKey).update({
+    solved: true,
+    winner,
+    solvedAt: Date.now()
+  });
 }
 
 // ===============================
@@ -182,7 +178,6 @@ async function getOrCreateUserFromEmail(email) {
 
 export async function handler(event) {
   try {
-
     const { guess, email } = JSON.parse(event.body || "{}");
 
     if (!guess || guess.length !== 5 || !email) {
@@ -206,25 +201,14 @@ export async function handler(event) {
     const isCorrect = cleanGuess === word;
     const score = calculateScore(evaluation, isCorrect);
 
-    // ===============================
-    // USER CREATION (NEW)
-    // ===============================
+    const user = await getOrCreateUser(email);
 
-    const user = await getOrCreateUserFromEmail(email);
-
-    // ===============================
-    // SAVE SCORE (NEW)
-    // ===============================
-
-    await supabase.from("scores").insert({
-      user_id: user.id,
+    await db.collection("scores").add({
+      userId: user.id,
       username: user.username,
-      score
+      score,
+      createdAt: Date.now()
     });
-
-    // ===============================
-    // GAME LOCK LOGIC
-    // ===============================
 
     if (game.solved) {
       return json({
