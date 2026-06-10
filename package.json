@@ -2,6 +2,6 @@
   "name": "one-shot-wordle",
   "version": "1.0.0",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.0"
+    "firebase-admin": "^12.0.0"
   }
 }
