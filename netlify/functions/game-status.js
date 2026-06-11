@@ -40,13 +40,14 @@ export async function handler() {
     const game = doc.data();
 
     return {
-      statusCode: 200,
-      body: JSON.stringify({
-        solved: game.solved || false,
-        winner: game.winner || null,
-        answer: game.word || null
-      })
-    };
+  statusCode: 200,
+  body: JSON.stringify({
+    solved: game.solved || false,
+    winner: game.winner || null,
+    answer: game.word || null,
+    test: "GAME_STATUS_V2"
+  })
+};
 
   } catch (err) {
 
