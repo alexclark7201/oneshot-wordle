@@ -231,15 +231,18 @@ await db.collection("scores").add({
 });
 
     if (game.solved) {
-      return json({
-        evaluation,
-        score,
-        isCorrect,
-        gameLocked: true,
-        winner: game.winner,
-        message: `Already solved today by ${game.winner}`
-      });
-    }
+
+  return json({
+    evaluation: null,
+    score: 0,
+    isCorrect: false,
+    gameLocked: true,
+    winner: game.winner,
+    answer: game.word,
+    message: `🏆 Today's winner: ${game.winner}`
+  });
+
+}
 
     if (isCorrect) {
       await lockGame(todayKey, user.username);
