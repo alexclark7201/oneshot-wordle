@@ -406,22 +406,61 @@ async function checkGameStatus() {
 
     if (!data.solved) return;
 
-    guessInput.disabled = true;
-    btn.disabled = true;
-
     const answer =
       (data.answer || "").toUpperCase();
 
+    // Fill tiles with answer
     tiles.forEach((tile, i) => {
 
       tile.textContent = answer[i] || "";
+
+      tile.classList.remove(
+        "correct",
+        "present",
+        "absent"
+      );
 
       tile.classList.add("correct");
 
     });
 
-    msg.innerHTML =
-      `🏆 Today's winner: <b>${data.winner}</b>`;
+    // Hide game controls
+    guessInput.style.display = "none";
+    emailInput.style.display = "none";
+    btn.style.display = "none";
+    shareBtn.style.display = "none";
+
+    // Update subtitle
+    const subtitle =
+      document.querySelector("p");
+
+    if (subtitle) {
+      subtitle.textContent =
+        "Today's puzzle has been solved.";
+    }
+
+    // Winner display
+    msg.innerHTML = `
+      <div style="
+        text-align:center;
+        margin-top:10px;
+      ">
+        <div style="
+          font-size:14px;
+          opacity:.8;
+        ">
+          🏆 Today's Winner
+        </div>
+
+        <div style="
+          font-size:28px;
+          font-weight:700;
+          margin-top:8px;
+        ">
+          ${data.winner}
+        </div>
+      </div>
+    `;
 
   } catch (err) {
 
