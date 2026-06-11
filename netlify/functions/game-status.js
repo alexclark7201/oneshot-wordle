@@ -19,25 +19,46 @@ function getTodayKey() {
 
 export async function handler() {
 
-  const todayKey = getTodayKey();
+  try {
 
-  const snapshot = await db.collection("games").get();
+    const todayKey = getTodayKey();
 
-  const docs = [];
+    const doc = await db
+      .collection("games")
+      .doc(todayKey)
+      .get();
 
-  snapshot.forEach(doc => {
-    docs.push({
-      id: doc.id,
-      ...doc.data()
-    });
-  });
+    if (!doc.exists) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          solved: false
+        })
+      };
+    }
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      todayKey,
-      docs
-    })
-  };
+    const game = doc.data();
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        solved: game.solved || false,
+        winner: game.winner || null,
+        answer: game.word || null
+      })
+    };
+
+  } catch (err) {
+
+    console.error(err);
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        solved: false
+      })
+    };
+
+  }
 
 }
