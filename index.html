@@ -395,7 +395,44 @@ async function loadLeaderboard() {
   }
 }
 
+async function checkGameStatus() {
+
+  try {
+
+    const res =
+      await fetch("/.netlify/functions/game-status");
+
+    const data = await res.json();
+
+    if (!data.solved) return;
+
+    guessInput.disabled = true;
+    btn.disabled = true;
+
+    const answer =
+      (data.answer || "").toUpperCase();
+
+    tiles.forEach((tile, i) => {
+
+      tile.textContent = answer[i] || "";
+
+      tile.classList.add("correct");
+
+    });
+
+    msg.innerHTML =
+      `🏆 Today's winner: <b>${data.winner}</b>`;
+
+  } catch (err) {
+
+    console.error(err);
+
+  }
+
+}
+  
 loadLeaderboard();
+ checkGameStatus(); 
 
 </script>
 
