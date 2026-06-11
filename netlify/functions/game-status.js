@@ -13,8 +13,16 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 function getTodayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+
+  const eastern = new Date(
+    new Date().toLocaleString(
+      "en-US",
+      { timeZone: "America/New_York" }
+    )
+  );
+
+  return `${eastern.getFullYear()}-${eastern.getMonth() + 1}-${eastern.getDate()}`;
+
 }
 
 export async function handler() {
