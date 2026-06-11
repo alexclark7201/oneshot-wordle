@@ -203,12 +203,32 @@ export async function handler(event) {
 
     const user = await getOrCreateUser(email);
 
-    await db.collection("scores").add({
-      userId: user.id,
-      username: user.username,
-      score,
-      createdAt: Date.now()
-    });
+const existingPlay = await db
+  .collection("scores")
+  .where("username", "==", user.username)
+  .where("dateKey", "==", todayKey)
+  .limit(1)
+  .get();
+
+if (!existingPlay.empty) {
+
+  return json({
+    evaluation: null,
+    score: 0,
+    isCorrect: false,
+    gameLocked: false,
+    message: "Already played today."
+  });
+
+}
+
+await db.collection("scores").add({
+  userId: user.id,
+  username: user.username,
+  score,
+  dateKey: todayKey,
+  createdAt: Date.now()
+});
 
     if (game.solved) {
       return json({
